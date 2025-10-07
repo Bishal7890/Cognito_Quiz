@@ -1,18 +1,16 @@
 // app/index.tsx
-import * as Haptics from "expo-haptics"; // optional (expo install expo-haptics)
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Animated,
-  Easing,
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Category = { id: number; name: string };
 
@@ -25,60 +23,21 @@ export default function Home() {
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<number | "any">("any");
   const [loadingCats, setLoadingCats] = useState(false);
-  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
-  // Animated bubble values: float, scale, and pulse (opacity)
-  const floatVal = useRef(new Animated.Value(0)).current;
-  const scaleVal = useRef(new Animated.Value(1)).current;
-  const pulseVal = useRef(new Animated.Value(0.6)).current;
-
-  useEffect(() => {
-    // floating (translateY) animation loop
-    const floatLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatVal, { toValue: 1, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(floatVal, { toValue: 0, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-
-    // scale gentle loop
-    const scaleLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(scaleVal, { toValue: 1.04, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(scaleVal, { toValue: 1.0, duration: 4200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-
-    // pulse opacity loop
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseVal, { toValue: 0.9, duration: 2000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulseVal, { toValue: 0.6, duration: 2000, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ])
-    );
-
-    floatLoop.start();
-    scaleLoop.start();
-    pulseLoop.start();
-
-    return () => {
-      floatLoop.stop();
-      scaleLoop.stop();
-      pulseLoop.stop();
-    };
-  }, [floatVal, scaleVal, pulseVal]);
-
-  // Fetch categories
   useEffect(() => {
     let active = true;
-    async function load() {
+    async function loadCats() {
       setLoadingCats(true);
       try {
         const res = await fetch("https://opentdb.com/api_category.php");
         const json = await res.json();
         if (!active) return;
-        if (json?.trivia_categories) setCategories(json.trivia_categories);
-        else setCategories(null);
+        if (json.trivia_categories && Array.isArray(json.trivia_categories)) {
+          setCategories(json.trivia_categories);
+        } else {
+          setCategories(null);
+        }
       } catch (e) {
         console.warn("Failed to load categories:", e);
         setCategories(null);
@@ -86,212 +45,244 @@ export default function Home() {
         setLoadingCats(false);
       }
     }
-    load();
+    loadCats();
     return () => {
       active = false;
     };
   }, []);
 
-  // Haptic helper
-  const pressWithHaptic = (fn: () => void) => {
-    try {
-      Haptics.selectionAsync();
-    } catch {}
-    fn();
-  };
-
   function startQuiz() {
-    const params: Record<string, string> = { n: String(selectedCount), difficulty: selectedDifficulty };
+    const params: Record<string, string> = {
+      n: String(selectedCount),
+      difficulty: selectedDifficulty,
+    };
     if (selectedCategory !== "any") params.category = String(selectedCategory);
     router.push({ pathname: "/quiz", params });
   }
 
-  // combined transforms for the bubble
-  const translateY = floatVal.interpolate({ inputRange: [0, 1], outputRange: [0, -18] });
-  const combinedScale = scaleVal;
-  const combinedOpacity = pulseVal;
-
   return (
-    <LinearGradient colors={["#f7eaff", "#e6cfff"]} style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>QUIZ</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#f8ecff" }}>
+      <LinearGradient colors={["#f8ecff", "#efe1ff"]} style={styles.container}>
+        <ScrollView
+          contentContainerStyle={{
+            alignItems: "center",
+            paddingHorizontal: 16,
+            // make header a bit higher while still keeping safe-area
+            paddingTop: (insets.top || 0) + 2,
+            paddingBottom: 60,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Bubble Header (raised slightly) */}
+          <LinearGradient
+            colors={["#f3dfff", "#ebc8ff"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.bubbleHeader, { marginTop: -34 }]}
+          >
+            <Text style={styles.big}>QUIZ</Text>
 
-        {/* Animated bubble (float + scale + pulse) */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.bubble,
-            {
-              transform: [{ translateY }, { scale: combinedScale }],
-              opacity: combinedOpacity,
-              width: Math.min(380, width - 36),
-            },
-          ]}
-        />
+            <View style={styles.innerBubble}>
+              <Text style={styles.subtitle}>Dynamic Trivia</Text>
+            </View>
+          </LinearGradient>
 
-        <View style={styles.subtitleWrap}>
-          <Text style={styles.subtitle}>Dynamic Trivia</Text>
-        </View>
-
-        <View style={styles.centerControls}>
-          <Text style={styles.sectionLabel}>Number of questions</Text>
-          <View style={styles.amountRow}>
+          {/* Number of Questions */}
+          <Text style={styles.label}>Number of questions</Text>
+          <View style={styles.row}>
             {AMOUNTS.map((a) => (
               <TouchableOpacity
                 key={a}
-                activeOpacity={0.95}
-                onPress={() => pressWithHaptic(() => setSelectedCount(a))}
-                style={[styles.amountBtn, selectedCount === a && styles.amountBtnActive]}
+                onPress={() => setSelectedCount(a)}
+                style={[
+                  styles.countBtn,
+                  selectedCount === a && styles.countBtnActive,
+                ]}
               >
-                <Text style={[styles.amountText, selectedCount === a && styles.amountTextActive]}>{a}</Text>
+                <Text
+                  style={[
+                    styles.countText,
+                    selectedCount === a && styles.countTextActive,
+                  ]}
+                >
+                  {a}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={[styles.sectionLabel, { marginTop: 18 }]}>Difficulty</Text>
-          <View style={styles.diffRow}>
+          {/* Difficulty */}
+          <Text style={[styles.label, { marginTop: 16 }]}>Difficulty</Text>
+          <View style={styles.row}>
             {DIFFICULTIES.map((d) => (
               <TouchableOpacity
                 key={d}
-                activeOpacity={0.95}
-                onPress={() => pressWithHaptic(() => setSelectedDifficulty(d))}
-                style={[styles.diffBtn, selectedDifficulty === d && styles.diffBtnActive]}
+                onPress={() => setSelectedDifficulty(d)}
+                style={[
+                  styles.countBtn,
+                  selectedDifficulty === d && styles.countBtnActive,
+                ]}
               >
-                <Text style={[styles.diffText, selectedDifficulty === d && styles.diffTextActive]}>
+                <Text
+                  style={[
+                    styles.countText,
+                    selectedDifficulty === d && styles.countTextActive,
+                  ]}
+                >
                   {d[0].toUpperCase() + d.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        <View style={[styles.catSection, { width: Math.min(760, width - 36) }]}>
-          <Text style={styles.catLabel}>Category</Text>
-          <View style={styles.chipsWrap}>
-            <Chip label="Any" selected={selectedCategory === "any"} onPress={() => pressWithHaptic(() => setSelectedCategory("any"))} />
-            {categories &&
-              categories.map((c) => (
-                <Chip key={c.id} label={c.name} selected={selectedCategory === c.id} onPress={() => pressWithHaptic(() => setSelectedCategory(c.id))} />
-              ))}
-          </View>
-        </View>
+          {/* Category */}
+          <Text style={[styles.label, { marginTop: 16, alignSelf: "flex-start" }]}>
+            Category
+          </Text>
+          {loadingCats ? (
+            <ActivityIndicator color="#8a4bff" style={{ marginTop: 8 }} />
+          ) : categories ? (
+            <View style={styles.categoriesWrap}>
+              <View style={styles.categoriesRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.catBtn,
+                    selectedCategory === "any" && styles.catBtnActive,
+                  ]}
+                  onPress={() => setSelectedCategory("any")}
+                >
+                  <Text
+                    style={[
+                      styles.catText,
+                      selectedCategory === "any" && styles.catTextActive,
+                    ]}
+                  >
+                    Any
+                  </Text>
+                </TouchableOpacity>
 
-        <View style={{ width: "100%", alignItems: "center", marginTop: 22 }}>
-          <TouchableOpacity activeOpacity={0.95} onPress={startQuiz} style={styles.startBtn}>
+                {categories.map((c) => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[
+                      styles.catBtn,
+                      selectedCategory === c.id && styles.catBtnActive,
+                    ]}
+                    onPress={() => setSelectedCategory(c.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.catText,
+                        selectedCategory === c.id && styles.catTextActive,
+                      ]}
+                    >
+                      {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <Text style={{ marginTop: 8, color: "#5b2fa6" }}>
+              Couldn't load categories — defaulting to Any.
+            </Text>
+          )}
+
+          {/* Start Button */}
+          <TouchableOpacity style={styles.startBtn} onPress={startQuiz}>
             <Text style={styles.startText}>Start</Text>
           </TouchableOpacity>
-        </View>
 
-        <View style={{ height: 90 }} />
-      </ScrollView>
-    </LinearGradient>
+          <View style={{ height: 60 }} />
+        </ScrollView>
+      </LinearGradient>
+    </SafeAreaView>
   );
 }
 
-/* Chip Component */
-function Chip({ label, selected, onPress }: { label: string; selected?: boolean; onPress: () => void }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const onPressIn = () => Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start();
-  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-
-  return (
-    <Animated.View style={{ transform: [{ scale }], marginRight: 8, marginBottom: 10 }}>
-      <TouchableOpacity activeOpacity={0.95} onPressIn={onPressIn} onPressOut={onPressOut} onPress={onPress} style={[styles.chip, selected && styles.chipActive]}>
-        <Text numberOfLines={1} style={[styles.chipText, selected && styles.chipTextActive]}>
-          {label}
-        </Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-/* Styles */
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { alignItems: "center", paddingTop: 26, paddingHorizontal: 18 },
-  title: { fontSize: 54, fontWeight: "900", color: "#5b2fa6" },
 
-  bubble: {
-    position: "absolute",
-    top: 70,
-    height: 200,
-    borderRadius: 140,
-    backgroundColor: "rgba(200,160,255,0.18)",
-    left: 18,
-    right: 18,
-    alignSelf: "center",
-  },
-
-  subtitleWrap: {
-    marginTop: 18,
-    backgroundColor: "#ecd6ff",
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 24,
-  },
-  subtitle: { color: "#4a2f7a", fontWeight: "700", fontSize: 16 },
-
-  centerControls: { marginTop: 18, alignItems: "center", width: "100%" },
-  sectionLabel: { color: "#5b2fa6", fontWeight: "700", marginBottom: 8 },
-
-  amountRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  amountBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#fff",
-    marginHorizontal: 12,
+  bubbleHeader: {
+    width: "100%",
+    borderRadius: 80,
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 22, // slightly smaller so it sits higher
+    marginBottom: 18,
   },
-  amountBtnActive: { backgroundColor: "#8a4bff" },
-  amountText: { fontWeight: "800", color: "#2b1b4a" },
-  amountTextActive: { color: "#fff" },
+  innerBubble: {
+    backgroundColor: "#f0d9ff",
+    borderRadius: 50,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    marginTop: 6,
+  },
+  big: {
+    fontSize: 50,
+    fontWeight: "900",
+    color: "#5b2fa6",
+    letterSpacing: 1,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#5b2fa6",
+  },
 
-  diffRow: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
-  diffBtn: {
-    paddingHorizontal: 18,
+  label: { marginTop: 8, color: "#5b2fa6", fontWeight: "700", fontSize: 16 },
+  row: { flexDirection: "row", marginTop: 8, justifyContent: "center" },
+
+  countBtn: {
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 18,
+    borderRadius: 30,
     backgroundColor: "#fff",
-    marginHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "#efe6ff",
+    marginHorizontal: 6,
+    shadowColor: "#8a4bff",
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  diffBtnActive: { backgroundColor: "#8a4bff", borderColor: "#8a4bff" },
-  diffText: { fontWeight: "700", color: "#2b1b4a" },
-  diffTextActive: { color: "#fff" },
+  countBtnActive: {
+    backgroundColor: "#8a4bff",
+    shadowOpacity: 0.3,
+  },
+  countText: { fontWeight: "700", color: "#2b1b4a" },
+  countTextActive: { color: "#fff" },
 
-  catSection: { marginTop: 22, width: "100%" },
-  catLabel: { color: "#5b2fa6", fontWeight: "700", marginBottom: 8, alignSelf: "flex-start" },
-  chipsWrap: {
+  categoriesWrap: { width: "100%", marginTop: 8 },
+  categoriesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    alignItems: "flex-start",
-    justifyContent: "flex-start",
-    paddingHorizontal: 6,
+    justifyContent: "center",
   },
-
-  chip: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 10,
+  catBtn: {
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#efe6ff",
-    minWidth: 0,
-    alignItems: "center",
+    margin: 6,
+    shadowColor: "#8a4bff",
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  chipActive: { backgroundColor: "#8a4bff", borderColor: "#8a4bff" },
-  chipText: { color: "#2b1b4a", fontSize: 13, paddingHorizontal: 4 },
-  chipTextActive: { color: "#fff", fontWeight: "700" },
+  catBtnActive: { backgroundColor: "#8a4bff", borderColor: "#8a4bff" },
+  catText: { color: "#2b1b4a", fontSize: 13, fontWeight: "500" },
+  catTextActive: { color: "#fff", fontWeight: "700" },
 
   startBtn: {
-    marginTop: 12,
+    marginTop: 26,
     backgroundColor: "#b88bff",
     borderRadius: 28,
-    paddingHorizontal: 40,
+    paddingHorizontal: 36,
     paddingVertical: 12,
+    shadowColor: "#8a4bff",
+    shadowOpacity: 0.4,
+    elevation: 4,
   },
   startText: { color: "#fff", fontWeight: "800", fontSize: 16 },
 });
