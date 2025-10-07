@@ -1,0 +1,7 @@
+﻿{
+  "buildCommand": "expo export -p web",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/:path*", "destination": "/" }
+  ]
+}
