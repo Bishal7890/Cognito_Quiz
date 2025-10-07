@@ -78,7 +78,7 @@ export default function Home() {
             colors={["#f3dfff", "#ebc8ff"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={[styles.bubbleHeader, { marginTop: -34 }]}
+            style={[styles.bubbleHeader, { marginTop: -8 }]}
           >
             <Text style={styles.big}>QUIZ</Text>
 
